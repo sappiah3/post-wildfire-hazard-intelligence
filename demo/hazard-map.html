@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Post-Wildfire Hazard Intelligence · Sam Appiah, GISP</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+
+<style>
+:root {
+  --bg:#0d1117; --surface:#161b22; --surf2:#21262d;
+  --border:#30363d; --text:#e6edf3; --muted:#8b949e;
+  --accent:#f0a500; --accent-dim:rgba(240,165,0,.12);
+  --blue:#58a6ff;
+  --critical:#ff4444; --high:#ff8c00; --moderate:#f0a500; --low:#3fb950;
+  --sw:300px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;}
+
+/* ─── SIDEBAR ─── */
+#sidebar{
+  width:var(--sw);min-width:var(--sw);
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow-y:auto;
+  z-index:1000;
+}
+#sidebar::before{content:'';display:block;height:3px;background:linear-gradient(90deg,var(--accent),transparent);flex-shrink:0;}
+
+/* header */
+#sb-head{padding:14px 16px;border-bottom:1px solid var(--border);}
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:6px;}
+.sb-title{font-size:14px;font-weight:600;line-height:1.3;}
+.sb-sub{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--muted);margin-top:3px;line-height:1.6;}
+.sb-links{display:flex;gap:10px;margin-top:9px;}
+.sb-link{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--blue);text-decoration:none;opacity:.8;}
+.sb-link:hover{opacity:1;text-decoration:underline;}
+
+/* KPIs */
+#kpis{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border);}
+.kpi{padding:11px 6px;text-align:center;border-right:1px solid var(--border);cursor:pointer;transition:background .15s;}
+.kpi:last-child{border-right:none;}
+.kpi:hover,.kpi.active{background:var(--surf2);}
+.kpi-n{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;line-height:1;display:block;}
+.kpi-l{font-size:8.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-top:2px;}
+[data-t="Critical"] .kpi-n{color:var(--critical);}
+[data-t="High"]     .kpi-n{color:var(--high);}
+[data-t="Moderate"] .kpi-n{color:var(--moderate);}
+[data-t="Low"]      .kpi-n{color:var(--low);}
+
+/* section */
+.sec{padding:13px 15px;border-bottom:1px solid var(--border);}
+.sec-lbl{font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:9px;}
+
+/* layer rows */
+.lrow{display:flex;align-items:center;justify-content:space-between;padding:4px 0;}
+.lname{font-size:11.5px;color:var(--text);display:flex;align-items:center;gap:7px;}
+.ldot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.tog{position:relative;width:32px;height:17px;cursor:pointer;flex-shrink:0;}
+.tog input{opacity:0;width:0;height:0;}
+.tog-track{position:absolute;inset:0;background:var(--border);border-radius:8px;transition:background .2s;}
+.tog input:checked ~ .tog-track{background:var(--accent);}
+.tog-thumb{position:absolute;top:2px;left:2px;width:13px;height:13px;background:#fff;border-radius:50%;transition:transform .2s;}
+.tog input:checked ~ .tog-thumb{transform:translateX(15px);}
+
+/* filter */
+#tier-filter{display:flex;flex-wrap:wrap;gap:4px;}
+.tfbtn{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;padding:4px 9px;border-radius:3px;border:1px solid;cursor:pointer;background:transparent;transition:all .15s;letter-spacing:.3px;}
+[data-f="All"]     .tfbtn,.tfbtn[data-f="All"]     {border-color:var(--muted);color:var(--muted);}
+[data-f="Critical"] .tfbtn,.tfbtn[data-f="Critical"]{border-color:var(--critical);color:var(--critical);}
+[data-f="High"]     .tfbtn,.tfbtn[data-f="High"]    {border-color:var(--high);color:var(--high);}
+[data-f="Moderate"] .tfbtn,.tfbtn[data-f="Moderate"]{border-color:var(--moderate);color:var(--moderate);}
+[data-f="Low"]      .tfbtn,.tfbtn[data-f="Low"]     {border-color:var(--low);color:var(--low);}
+.tfbtn.active{opacity:1;}
+.tfbtn[data-f="All"].active     {background:var(--surf2);color:var(--text);}
+.tfbtn[data-f="Critical"].active{background:rgba(255,68,68,.15);}
+.tfbtn[data-f="High"].active    {background:rgba(255,140,0,.15);}
+.tfbtn[data-f="Moderate"].active{background:rgba(240,165,0,.15);}
+.tfbtn[data-f="Low"].active     {background:rgba(63,185,80,.15);}
+
+/* legend */
+.legrow{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--muted);margin-bottom:5px;}
+.legsw{width:13px;height:9px;border-radius:2px;border:1px solid rgba(255,255,255,.1);flex-shrink:0;}
+.leg-div{height:1px;background:var(--border);margin:6px 0;}
+
+/* skills terminal */
+#skills{font-family:'JetBrains Mono',monospace;font-size:9.5px;display:flex;flex-direction:column;gap:3px;}
+.sk-line{display:flex;align-items:baseline;line-height:1.7;}
+.sk-p{color:var(--low);margin-right:5px;}
+.sk-c{color:var(--blue);font-weight:700;}
+.sk-a{color:var(--muted);margin-left:4px;}
+.gisp-badge{display:inline-flex;align-items:center;gap:4px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:3px;margin-top:10px;}
+
+/* ─── MAP AREA ─── */
+#map-area{flex:1;display:flex;flex-direction:column;position:relative;}
+
+#topbar{
+  height:38px;background:rgba(13,17,23,.95);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px;z-index:500;flex-shrink:0;
+}
+#bm-btns{display:flex;gap:0;}
+.bmbtn{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:600;padding:4px 10px;background:transparent;border:1px solid var(--border);color:var(--muted);cursor:pointer;letter-spacing:.4px;transition:all .15s;margin-left:-1px;}
+.bmbtn:first-child{border-radius:3px 0 0 3px;margin-left:0;}
+.bmbtn:last-child{border-radius:0 3px 3px 0;}
+.bmbtn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);z-index:1;}
+#coord-disp{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--muted);}
+#ev-tag{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--accent);background:var(--accent-dim);border:1px solid var(--accent);padding:3px 9px;border-radius:3px;}
+
+#map{flex:1;}
+
+/* ─── DETAIL PANEL ─── */
+#detail{
+  position:fixed;bottom:0;left:var(--sw);right:0;
+  background:var(--surface);border-top:2px solid var(--border);
+  z-index:2000;transform:translateY(100%);
+  transition:transform .3s cubic-bezier(.4,0,.2,1);
+}
+#detail.open{transform:translateY(0);}
+#dhead{display:flex;align-items:flex-start;justify-content:space-between;padding:11px 16px;border-bottom:1px solid var(--border);}
+#dbasin-name{font-size:14px;font-weight:600;}
+#dhuc{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-top:2px;}
+#dhead-right{display:flex;align-items:center;gap:8px;}
+#dtier{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.5px;padding:3px 9px;border-radius:3px;}
+#dclose{background:none;border:none;color:var(--muted);cursor:pointer;font-size:17px;line-height:1;}
+#dbody{display:grid;grid-template-columns:180px 1fr 185px;}
+.dcol{padding:13px 16px;border-right:1px solid var(--border);}
+.dcol:last-child{border-right:none;}
+
+/* score */
+.sc-lbl{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
+.sc-num{font-family:'JetBrains Mono',monospace;font-size:44px;font-weight:700;line-height:1;}
+.sc-track{height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:8px;}
+.sc-fill{height:100%;border-radius:3px;width:0;transition:width .9s cubic-bezier(.4,0,.2,1);background:linear-gradient(90deg,var(--moderate),var(--critical));}
+
+/* metrics */
+#mets{display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;align-content:start;}
+.met-k{font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+.met-v{font-size:13px;font-weight:600;margin-top:2px;}
+
+/* component bars */
+.sc-lbl{margin-bottom:8px;}
+#cbars{display:flex;flex-direction:column;gap:6px;}
+.cbar-row{display:flex;align-items:center;gap:6px;}
+.cbar-nm{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--muted);width:58px;text-align:right;flex-shrink:0;}
+.cbar-track{flex:1;height:7px;background:var(--border);border-radius:4px;overflow:hidden;}
+.cbar-fill{height:100%;border-radius:4px;width:0;transition:width .65s cubic-bezier(.4,0,.2,1);}
+.cbar-val{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--muted);width:26px;text-align:right;flex-shrink:0;}
+
+#daction{padding:8px 16px;border-top:1px solid var(--border);font-size:10.5px;color:var(--muted);font-style:italic;}
+
+/* ─── LEAFLET OVERRIDES ─── */
+.leaflet-container{background:#1a2535;}
+.leaflet-popup-content-wrapper{background:var(--surface)!important;color:var(--text)!important;border:1px solid var(--border)!important;border-radius:6px!important;box-shadow:0 8px 24px rgba(0,0,0,.55)!important;}
+.leaflet-popup-tip{background:var(--surface)!important;}
+.leaflet-popup-content{margin:11px 13px!important;font-size:12px!important;font-family:'Inter',sans-serif!important;}
+.leaflet-control-zoom a{background:var(--surface)!important;color:var(--text)!important;border-color:var(--border)!important;}
+.leaflet-control-zoom a:hover{background:var(--surf2)!important;}
+.leaflet-tooltip{background:var(--surface)!important;border:1px solid var(--border)!important;color:var(--text)!important;font-family:'Inter',sans-serif!important;font-size:11.5px!important;border-radius:4px!important;box-shadow:0 3px 10px rgba(0,0,0,.4)!important;}
+.leaflet-tooltip-top::before{border-top-color:var(--border)!important;}
+
+/* Popup internals */
+.pu-title{font-weight:600;font-size:13px;margin-bottom:5px;}
+.pu-badge{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:700;padding:2px 7px;border-radius:3px;margin-bottom:8px;letter-spacing:.3px;}
+.pu-table{width:100%;border-collapse:collapse;}
+.pu-table td{padding:2.5px 0;font-size:10.5px;}
+.pu-table td:first-child{color:var(--muted);padding-right:10px;}
+.pu-table td:last-child{font-weight:600;text-align:right;}
+.pu-action{margin-top:8px;font-size:10px;color:var(--muted);font-style:italic;border-top:1px solid var(--border);padding-top:6px;}
+
+/* Pulse animation */
+@keyframes pulse-r{0%{transform:scale(.8);opacity:1;}80%,100%{transform:scale(2.8);opacity:0;}}
+
+/* Sidebar scrollbar */
+#sidebar::-webkit-scrollbar{width:3px;}
+#sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+</style>
+</head>
+<body>
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside id="sidebar">
+
+  <div id="sb-head">
+    <div class="eyebrow">⬡ Portfolio · GIS Analytics</div>
+    <div class="sb-title">Post-Wildfire Hazard<br>Intelligence Map</div>
+    <div class="sb-sub">Woolsey Fire 2018 · Los Angeles &amp; Ventura Co.<br>Multi-hazard cascade analysis · 6 HUC-12 basins</div>
+    <div class="sb-links">
+      <a class="sb-link" href="https://github.com/samappiah" target="_blank">⌥ GitHub</a>
+      <a class="sb-link" href="https://linkedin.com/in/yawappiah" target="_blank">⌥ LinkedIn</a>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div id="kpis">
+    <div class="kpi" data-t="Critical" onclick="filterTier('Critical')">
+      <span class="kpi-n" id="k-c">2</span><span class="kpi-l">Critical</span>
+    </div>
+    <div class="kpi" data-t="High" onclick="filterTier('High')">
+      <span class="kpi-n" id="k-h">2</span><span class="kpi-l">High</span>
+    </div>
+    <div class="kpi" data-t="Moderate" onclick="filterTier('Moderate')">
+      <span class="kpi-n" id="k-m">1</span><span class="kpi-l">Moderate</span>
+    </div>
+    <div class="kpi" data-t="Low" onclick="filterTier('Low')">
+      <span class="kpi-n" id="k-l">1</span><span class="kpi-l">Low</span>
+    </div>
+  </div>
+
+  <!-- Layers -->
+  <div class="sec">
+    <div class="sec-lbl">Layers</div>
+    <div class="lrow">
+      <span class="lname"><span class="ldot" style="background:#ff6b35;box-shadow:0 0 4px #ff6b35;"></span>Fire Perimeter</span>
+      <label class="tog"><input type="checkbox" id="tog-perim" checked onchange="toggleLayer('perim',this.checked)"><span class="tog-track"></span><span class="tog-thumb"></span></label>
+    </div>
+    <div class="lrow">
+      <span class="lname"><span class="ldot" style="background:var(--accent);"></span>Watershed Basins</span>
+      <label class="tog"><input type="checkbox" id="tog-basins" checked onchange="toggleLayer('basins',this.checked)"><span class="tog-track"></span><span class="tog-thumb"></span></label>
+    </div>
+    <div class="lrow">
+      <span class="lname"><span class="ldot" style="background:var(--blue);"></span>ERA5 Stations</span>
+      <label class="tog"><input type="checkbox" id="tog-era5" checked onchange="toggleLayer('era5',this.checked)"><span class="tog-track"></span><span class="tog-thumb"></span></label>
+    </div>
+    <div class="lrow">
+      <span class="lname"><span class="ldot" style="background:#e040fb;"></span>Infrastructure</span>
+      <label class="tog"><input type="checkbox" id="tog-infra" checked onchange="toggleLayer('infra',this.checked)"><span class="tog-track"></span><span class="tog-thumb"></span></label>
+    </div>
+  </div>
+
+  <!-- Filter -->
+  <div class="sec">
+    <div class="sec-lbl">Filter by Risk Tier</div>
+    <div id="tier-filter">
+      <button class="tfbtn active" data-f="All"      onclick="filterTier('All')">All</button>
+      <button class="tfbtn"        data-f="Critical" onclick="filterTier('Critical')">Critical</button>
+      <button class="tfbtn"        data-f="High"     onclick="filterTier('High')">High</button>
+      <button class="tfbtn"        data-f="Moderate" onclick="filterTier('Moderate')">Moderate</button>
+      <button class="tfbtn"        data-f="Low"      onclick="filterTier('Low')">Low</button>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="sec">
+    <div class="sec-lbl">Legend</div>
+    <div class="legrow"><div class="legsw" style="background:rgba(192,57,43,.6);border-color:#ff4444;"></div>Critical Risk (score ≥ 75)</div>
+    <div class="legrow"><div class="legsw" style="background:rgba(230,126,34,.6);border-color:#ff8c00;"></div>High Risk (50 – 74)</div>
+    <div class="legrow"><div class="legsw" style="background:rgba(243,156,18,.5);border-color:#f0a500;"></div>Moderate Risk (25 – 49)</div>
+    <div class="legrow"><div class="legsw" style="background:rgba(39,174,96,.45);border-color:#3fb950;"></div>Low Risk (0 – 24)</div>
+    <div class="leg-div"></div>
+    <div class="legrow"><div class="legsw" style="background:transparent;border:2px dashed #ff6b35;"></div>Woolsey Fire Perimeter</div>
+    <div class="legrow"><div class="legsw" style="background:var(--blue);border-radius:2px;"></div>ERA5 Precip Station</div>
+    <div class="legrow"><div class="legsw" style="background:#e040fb;border-color:#e040fb;border-radius:50%;"></div>Infrastructure at Risk</div>
+  </div>
+
+  <!-- Skills terminal -->
+  <div class="sec">
+    <div class="sec-lbl">Skills Demonstrated</div>
+    <div id="skills">
+      <div class="sk-line"><span class="sk-p">$</span><span class="sk-c">leaflet</span><span class="sk-a">--web-gis-mapping</span></div>
+      <div class="sk-line"><span class="sk-p">$</span><span class="sk-c">xarray</span><span class="sk-a">--era5-netcdf-reanalysis</span></div>
+      <div class="sk-line"><span class="sk-p">$</span><span class="sk-c">rasterio</span><span class="sk-a">--cog-raster-io</span></div>
+      <div class="sk-line"><span class="sk-p">$</span><span class="sk-c">geopandas</span><span class="sk-a">--watershed-analysis</span></div>
+      <div class="sk-line"><span class="sk-p">$</span><span class="sk-c">sklearn</span><span class="sk-a">--rf-hazard-model</span></div>
+      <div class="sk-line"><span class="sk-p">$</span><span class="sk-c">postgis</span><span class="sk-a">--spatial-sql-pipeline</span></div>
+      <div class="sk-line"><span class="sk-p">$</span><span class="sk-c">python</span><span class="sk-a">--arcpy-automation</span></div>
+      <div class="sk-line"><span class="sk-p">$</span><span class="sk-c">javascript</span><span class="sk-a">--arcgis-maps-sdk</span></div>
+    </div>
+    <div class="gisp-badge">✦ GIS Professional (GISP) · #162740</div>
+  </div>
+
+</aside>
+
+<!-- ═══ MAP ═══ -->
+<div id="map-area">
+  <div id="topbar">
+    <div id="bm-btns">
+      <button class="bmbtn active" onclick="setBasemap('dark')">Dark</button>
+      <button class="bmbtn" onclick="setBasemap('satellite')">Satellite</button>
+      <button class="bmbtn" onclick="setBasemap('topo')">Topo</button>
+    </div>
+    <div id="ev-tag">⬡ Woolsey Fire 2018</div>
+    <div id="coord-disp">34.0700° N · 118.9500° W</div>
+  </div>
+  <div id="map"></div>
+</div>
+
+<!-- ═══ DETAIL PANEL ═══ -->
+<div id="detail">
+  <div id="dhead">
+    <div>
+      <div id="dbasin-name">—</div>
+      <div id="dhuc">HUC-12: —</div>
+    </div>
+    <div id="dhead-right">
+      <div id="dtier">—</div>
+      <button id="dclose" onclick="closeDetail()">✕</button>
+    </div>
+  </div>
+  <div id="dbody">
+    <!-- Score -->
+    <div class="dcol" id="score-col">
+      <div class="sc-lbl">Hazard Score</div>
+      <div class="sc-num" id="dscore">—</div>
+      <div class="sc-track"><div class="sc-fill" id="dscore-bar"></div></div>
+      <div style="font-size:10px;color:var(--muted);margin-top:8px;" id="d-prob">Debris flow P: —</div>
+    </div>
+    <!-- Metrics -->
+    <div class="dcol">
+      <div id="mets">
+        <div><div class="met-k">% High Severity</div><div class="met-v" id="d-sev">—</div></div>
+        <div><div class="met-k">Slope P90</div><div class="met-v" id="d-slope">—</div></div>
+        <div><div class="met-k">Peak 24h Precip</div><div class="met-v" id="d-precip">—</div></div>
+        <div><div class="met-k">Burn Area</div><div class="met-v" id="d-area">—</div></div>
+        <div><div class="met-k">Elevation Range</div><div class="met-v" id="d-elev">—</div></div>
+        <div><div class="met-k">ERA5 72h Precip</div><div class="met-v" id="d-p72">—</div></div>
+      </div>
+    </div>
+    <!-- Component bars -->
+    <div class="dcol">
+      <div class="sc-lbl">Component Scores</div>
+      <div id="cbars">
+        <div class="cbar-row"><span class="cbar-nm">Debris P</span><div class="cbar-track"><div class="cbar-fill" id="cb-prob" style="background:#ff4444;"></div></div><span class="cbar-val" id="cv-prob">—</span></div>
+        <div class="cbar-row"><span class="cbar-nm">Severity</span><div class="cbar-track"><div class="cbar-fill" id="cb-sev"  style="background:#ff8c00;"></div></div><span class="cbar-val" id="cv-sev">—</span></div>
+        <div class="cbar-row"><span class="cbar-nm">Slope</span>  <div class="cbar-track"><div class="cbar-fill" id="cb-slp"  style="background:#f0a500;"></div></div><span class="cbar-val" id="cv-slp">—</span></div>
+        <div class="cbar-row"><span class="cbar-nm">Precip</span> <div class="cbar-track"><div class="cbar-fill" id="cb-prc"  style="background:#58a6ff;"></div></div><span class="cbar-val" id="cv-prc">—</span></div>
+      </div>
+    </div>
+  </div>
+  <div id="daction">Recommended action: <span id="d-act">—</span></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script>
+// ═══════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════
+
+const BASINS = {type:'FeatureCollection',features:[
+  {type:'Feature',properties:{
+    huc12:'180701020601',name:'Malibu Creek Upper',tier:'Critical',score:91.2,
+    debris_prob:0.87,pct_high_sev:72,slope_p90:34,peak_24h:88.4,burn_area_km2:38.2,
+    elev_range:680,precip_72h:142.1,
+    action:'Immediate underwriting review; suspend new coverage pending field assessment'
+  },geometry:{type:'Polygon',coordinates:[[
+    [-118.878,34.088],[-118.845,34.083],[-118.808,34.087],[-118.800,34.110],
+    [-118.808,34.138],[-118.843,34.142],[-118.875,34.135],[-118.882,34.110],[-118.878,34.088]
+  ]]}},
+  {type:'Feature',properties:{
+    huc12:'180701020602',name:'Arroyo Sequit',tier:'Critical',score:88.4,
+    debris_prob:0.81,pct_high_sev:68,slope_p90:38,peak_24h:92.1,burn_area_km2:24.7,
+    elev_range:540,precip_72h:156.3,
+    action:'Immediate underwriting review; suspend new coverage pending field assessment'
+  },geometry:{type:'Polygon',coordinates:[[
+    [-118.968,34.033],[-118.945,34.025],[-118.905,34.028],[-118.882,34.052],
+    [-118.878,34.088],[-118.882,34.110],[-118.920,34.112],[-118.960,34.096],
+    [-118.975,34.068],[-118.968,34.033]
+  ]]}},
+  {type:'Feature',properties:{
+    huc12:'180701020603',name:'Triunfo Creek',tier:'High',score:78.4,
+    debris_prob:0.74,pct_high_sev:58,slope_p90:29,peak_24h:71.2,burn_area_km2:31.5,
+    elev_range:490,precip_72h:118.6,
+    action:'Elevated premium adjustment; require debris-flow endorsement disclosure'
+  },geometry:{type:'Polygon',coordinates:[[
+    [-119.025,34.108],[-119.015,34.088],[-118.975,34.068],[-118.960,34.096],
+    [-118.920,34.112],[-118.920,34.148],[-118.950,34.172],[-118.988,34.170],
+    [-119.022,34.155],[-119.030,34.130],[-119.025,34.108]
+  ]]}},
+  {type:'Feature',properties:{
+    huc12:'180701020604',name:'Conejo Creek',tier:'High',score:72.1,
+    debris_prob:0.68,pct_high_sev:51,slope_p90:26,peak_24h:58.8,burn_area_km2:19.3,
+    elev_range:380,precip_72h:95.4,
+    action:'Elevated premium adjustment; require debris-flow endorsement disclosure'
+  },geometry:{type:'Polygon',coordinates:[[
+    [-118.808,34.138],[-118.808,34.150],[-118.778,34.160],[-118.762,34.180],
+    [-118.768,34.200],[-118.800,34.210],[-118.845,34.205],[-118.875,34.188],
+    [-118.875,34.162],[-118.855,34.148],[-118.843,34.142],[-118.808,34.138]
+  ]]}},
+  {type:'Feature',properties:{
+    huc12:'180701020605',name:'Medea Creek',tier:'Moderate',score:47.1,
+    debris_prob:0.42,pct_high_sev:31,slope_p90:18,peak_24h:42.3,burn_area_km2:11.8,
+    elev_range:260,precip_72h:71.2,
+    action:'Standard review cycle; flag for next renewal assessment'
+  },geometry:{type:'Polygon',coordinates:[[
+    [-118.800,34.062],[-118.800,34.086],[-118.808,34.087],[-118.808,34.138],
+    [-118.843,34.142],[-118.843,34.082],[-118.830,34.058],[-118.800,34.062]
+  ]]}},
+  {type:'Feature',properties:{
+    huc12:'180701020606',name:'Las Virgenes Reservoir',tier:'Low',score:21.3,
+    debris_prob:0.19,pct_high_sev:12,slope_p90:12,peak_24h:28.1,burn_area_km2:4.2,
+    elev_range:180,precip_72h:46.8,
+    action:'Routine monitoring; no immediate underwriting action required'
+  },geometry:{type:'Polygon',coordinates:[[
+    [-118.760,34.105],[-118.735,34.098],[-118.715,34.108],[-118.712,34.138],
+    [-118.730,34.162],[-118.762,34.180],[-118.778,34.160],[-118.770,34.130],
+    [-118.760,34.105]
+  ]]}}
+]};
+
+const FIRE_PERIM = {type:'Feature',properties:{name:'Woolsey Fire Perimeter (Nov 2018)'},
+  geometry:{type:'Polygon',coordinates:[[
+    [-118.700,34.195],[-118.740,34.215],[-118.800,34.215],[-118.860,34.210],
+    [-118.920,34.202],[-118.980,34.188],[-119.040,34.168],[-119.092,34.140],
+    [-119.118,34.110],[-119.108,34.072],[-119.082,34.035],[-119.040,34.005],
+    [-118.988,33.985],[-118.935,33.978],[-118.878,33.982],[-118.828,34.000],
+    [-118.788,34.025],[-118.752,34.050],[-118.718,34.080],[-118.700,34.115],
+    [-118.700,34.195]
+  ]]}};
+
+const ERA5_STATIONS = [
+  {lat:34.038,lon:-118.780,name:'Malibu Creek RS',elev:142,p6:18.4,p24:87.4,p72:142.1,note:'Peak event: Jan 14 2019 01:00 UTC'},
+  {lat:34.028,lon:-118.938,name:'Arroyo Sequit RAWS',elev:88,p6:22.1,p24:92.1,p72:156.3,note:'Highest 24h total in network'},
+  {lat:34.122,lon:-119.082,name:'Point Mugu NAS',elev:31,p6:12.8,p24:42.1,p72:74.8,note:'Coastal influence reduces totals'},
+  {lat:34.172,lon:-118.838,name:'Thousand Oaks AWS',elev:268,p6:14.2,p24:51.8,p72:95.4,note:'Post-fire monitoring station'},
+  {lat:34.143,lon:-118.762,name:'Agoura Hills CIMIS',elev:310,p6:11.9,p24:45.2,p72:71.2,note:'Agriculture reference station'},
+];
+
+const INFRA = [
+  {lat:34.055,lon:-118.868,name:'Malibu Water Treatment Plant',type:'Water',risk:'Critical',note:'Serving 12,800 connections'},
+  {lat:34.018,lon:-118.895,name:'PCH Culvert Network',type:'Road',risk:'Critical',note:'13 culverts in debris flow runout zones'},
+  {lat:34.085,lon:-118.942,name:'Kanan Dume Rd Crossing',type:'Road',risk:'High',note:'Primary evacuation route'},
+  {lat:34.155,lon:-118.840,name:'Las Virgenes Water District',type:'Water',risk:'High',note:'Reservoir turbidity risk'},
+  {lat:34.132,lon:-118.808,name:'LADWP Agoura Substation',type:'Power',risk:'Moderate',note:'Serves 38,000 customers'},
+];
+
+// ═══════════════════════════════════════════════
+// MAP INIT
+// ═══════════════════════════════════════════════
+
+const TILE_URLS = {
+  dark:      ['https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png','© CartoDB'],
+  satellite: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}','© Esri'],
+  topo:      ['https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png','© OpenTopoMap'],
+};
+
+const map = L.map('map',{center:[34.1,-118.88],zoom:11,zoomControl:true});
+let baseTile = L.tileLayer(TILE_URLS.dark[0],{attribution:TILE_URLS.dark[1],maxZoom:19}).addTo(map);
+
+// Coordinate display
+map.on('mousemove',e=>{
+  const {lat,lng}=e.latlng;
+  document.getElementById('coord-disp').textContent=
+    `${Math.abs(lat).toFixed(4)}° ${lat>=0?'N':'S'} · ${Math.abs(lng).toFixed(4)}° ${lng>=0?'E':'W'}`;
+});
+
+// ═══════════════════════════════════════════════
+// TIER COLORS
+// ═══════════════════════════════════════════════
+
+const TIER_COLORS={
+  Critical:{fill:'rgba(192,57,43,.62)',stroke:'#ff4444',text:'#ff4444',bg:'rgba(255,68,68,.18)'},
+  High:    {fill:'rgba(220,110,20,.62)',stroke:'#ff8c00',text:'#ff8c00',bg:'rgba(255,140,0,.18)'},
+  Moderate:{fill:'rgba(210,140,0,.52)',stroke:'#f0a500',text:'#d4ac0d',bg:'rgba(240,165,0,.18)'},
+  Low:     {fill:'rgba(30,140,75,.45)',stroke:'#3fb950',text:'#3fb950',bg:'rgba(63,185,80,.18)'},
+};
+
+// ═══════════════════════════════════════════════
+// FIRE PERIMETER LAYER
+// ═══════════════════════════════════════════════
+
+const perimLayer = L.geoJSON(FIRE_PERIM,{
+  style:{color:'#ff6b35',weight:2.5,opacity:.9,fillColor:'#ff6b35',fillOpacity:.06,dashArray:'8,5'}
+}).bindPopup(`<div class="pu-title">🔥 Woolsey Fire Perimeter</div>
+  <table class="pu-table">
+    <tr><td>Ignition</td><td>Nov 8, 2018</td></tr>
+    <tr><td>Contained</td><td>Nov 21, 2018</td></tr>
+    <tr><td>Area burned</td><td>96,949 acres</td></tr>
+    <tr><td>Structures</td><td>1,643 destroyed</td></tr>
+    <tr><td>Source</td><td>CAL FIRE / MTBS</td></tr>
+  </table>`).addTo(map);
+
+// ═══════════════════════════════════════════════
+// WATERSHED BASINS LAYER
+// ═══════════════════════════════════════════════
+
+let basinsLayer = L.geoJSON(BASINS,{
+  style: f=>{
+    const tc=TIER_COLORS[f.properties.tier];
+    return {color:tc.stroke,weight:2,opacity:1,fillColor:tc.fill,fillOpacity:1};
+  },
+  onEachFeature:(f,layer)=>{
+    const p=f.properties, tc=TIER_COLORS[p.tier];
+
+    // Tooltip
+    layer.bindTooltip(
+      `<strong>${p.name}</strong><br>Risk: <span style="color:${tc.text};font-weight:700">${p.tier}</span> · Score ${p.score}`,
+      {sticky:true,opacity:.97}
+    );
+
+    // Popup
+    layer.bindPopup(`
+      <div class="pu-title">${p.name}</div>
+      <span class="pu-badge" style="background:${tc.bg};color:${tc.text};border:1px solid ${tc.stroke};">${p.tier.toUpperCase()}</span>
+      <table class="pu-table">
+        <tr><td>Hazard Score</td><td>${p.score} / 100</td></tr>
+        <tr><td>Debris Flow P</td><td>${(p.debris_prob*100).toFixed(0)}%</td></tr>
+        <tr><td>% High Severity</td><td>${p.pct_high_sev}%</td></tr>
+        <tr><td>Slope P90</td><td>${p.slope_p90}°</td></tr>
+        <tr><td>Peak 24h Precip</td><td>${p.peak_24h} mm</td></tr>
+        <tr><td>HUC-12</td><td style="font-family:'JetBrains Mono',monospace;font-size:10px">${p.huc12}</td></tr>
+      </table>
+      <div class="pu-action">${p.action}</div>
+    `);
+
+    // Click → detail panel
+    layer.on('click',()=>openDetail(p));
+
+    layer.on('mouseover',function(){
+      this.setStyle({weight:3,fillOpacity:0.85});
+    });
+    layer.on('mouseout',function(){
+      basinsLayer.resetStyle(this);
+    });
+  }
+}).addTo(map);
+
+// ═══════════════════════════════════════════════
+// ERA5 STATIONS LAYER
+// ═══════════════════════════════════════════════
+
+function era5Icon(){
+  return L.divIcon({
+    html:`<div style="
+      width:12px;height:12px;background:#58a6ff;
+      border:2px solid rgba(88,166,255,.4);border-radius:3px;
+      box-shadow:0 0 8px rgba(88,166,255,.6);
+    "></div>`,
+    className:'',iconSize:[12,12],iconAnchor:[6,6]
+  });
+}
+
+function makePrecipChart(data){
+  const h=44,w=160,mx=Math.max(...data);
+  const pts=data.map((v,i)=>`${(i/(data.length-1))*w},${h-((v/mx)*h*.9+2)}`).join(' ');
+  return `<svg width="${w}" height="${h}" style="display:block;margin-top:5px;">
+    <defs><linearGradient id="pg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#58a6ff" stop-opacity=".4"/>
+      <stop offset="100%" stop-color="#58a6ff" stop-opacity="0"/>
+    </linearGradient></defs>
+    <polygon points="${pts} ${w},${h} 0,${h}" fill="url(#pg)"/>
+    <polyline points="${pts}" fill="none" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="0" y="${h-1}" fill="#8b949e" font-size="8" font-family="JetBrains Mono,monospace">0h</text>
+    <text x="${w-14}" y="${h-1}" fill="#8b949e" font-size="8" font-family="JetBrains Mono,monospace">72h</text>
+  </svg>`;
+}
+
+const eraGroup = L.layerGroup();
+ERA5_STATIONS.forEach(s=>{
+  // Generate synthetic 72h precip curve with storm peak
+  const hours=Array.from({length:73},(_,i)=>{
+    const peak=36, spread=12;
+    const base=s.p24/24*.3;
+    const storm=s.p24*.12*Math.exp(-Math.pow(i-peak,2)/(2*spread*spread));
+    return Math.max(0,base+storm+(Math.random()*.4-.1));
+  });
+
+  const marker = L.marker([s.lat,s.lon],{icon:era5Icon()});
+  marker.bindPopup(`
+    <div class="pu-title">⬡ ERA5 Station: ${s.name}</div>
+    <table class="pu-table">
+      <tr><td>Elevation</td><td>${s.elev} m</td></tr>
+      <tr><td>6h accumulation</td><td>${s.p6} mm</td></tr>
+      <tr><td>24h accumulation</td><td><strong>${s.p24} mm</strong></td></tr>
+      <tr><td>72h accumulation</td><td>${s.p72} mm</td></tr>
+    </table>
+    <div style="font-size:9.5px;color:#8b949e;font-family:'JetBrains Mono',monospace;margin-top:6px;">72-hr precipitation (mm/h)</div>
+    ${makePrecipChart(hours)}
+    <div style="font-size:9px;color:#8b949e;margin-top:4px;font-style:italic;">${s.note}</div>
+  `,{maxWidth:220});
+  eraGroup.addLayer(marker);
+});
+eraGroup.addTo(map);
+
+// ═══════════════════════════════════════════════
+// INFRASTRUCTURE LAYER
+// ═══════════════════════════════════════════════
+
+const INFRA_ICONS={
+  Water:'💧', Road:'🛣️', Power:'⚡'
+};
+
+function infraIcon(risk){
+  const c=risk==='Critical'?'#ff4444':risk==='High'?'#ff8c00':'#f0a500';
+  const pulse=risk==='Critical'?`<div style="
+    position:absolute;inset:-5px;border-radius:50%;
+    border:2px solid ${c};
+    animation:pulse-r 1.8s cubic-bezier(.215,.61,.355,1) infinite;
+  "></div>`:'';
+  return L.divIcon({
+    html:`<div style="position:relative;width:14px;height:14px;">
+      ${pulse}
+      <div style="
+        width:14px;height:14px;border-radius:50%;
+        background:${c};border:2px solid rgba(255,255,255,.25);
+        box-shadow:0 0 8px ${c}88;
+      "></div>
+    </div>`,
+    className:'',iconSize:[14,14],iconAnchor:[7,7]
+  });
+}
+
+const infraGroup = L.layerGroup();
+INFRA.forEach(f=>{
+  const tc=TIER_COLORS[f.risk]||TIER_COLORS.Moderate;
+  L.marker([f.lat,f.lon],{icon:infraIcon(f.risk)})
+    .bindPopup(`
+      <div class="pu-title">${INFRA_ICONS[f.type]||'📍'} ${f.name}</div>
+      <span class="pu-badge" style="background:${tc.bg};color:${tc.text};border:1px solid ${tc.stroke};">${f.risk.toUpperCase()} RISK ZONE</span>
+      <table class="pu-table">
+        <tr><td>Asset type</td><td>${f.type} Infrastructure</td></tr>
+        <tr><td>Risk zone</td><td>${f.risk}</td></tr>
+        <tr><td>Note</td><td>${f.note}</td></tr>
+      </table>
+    `)
+    .addTo(infraGroup);
+});
+infraGroup.addTo(map);
+
+// ═══════════════════════════════════════════════
+// LAYER TOGGLES
+// ═══════════════════════════════════════════════
+
+const LAYERS={perim:perimLayer,basins:basinsLayer,era5:eraGroup,infra:infraGroup};
+
+function toggleLayer(id,show){
+  const layer=LAYERS[id];
+  if(!layer)return;
+  if(show) map.addLayer(layer);
+  else     map.removeLayer(layer);
+}
+
+// ═══════════════════════════════════════════════
+// BASEMAP SWITCHER
+// ═══════════════════════════════════════════════
+
+function setBasemap(key){
+  document.querySelectorAll('.bmbtn').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  map.removeLayer(baseTile);
+  const [url,attr]=TILE_URLS[key];
+  baseTile=L.tileLayer(url,{attribution:attr,maxZoom:19}).addTo(map);
+  baseTile.bringToBack();
+}
+
+// ═══════════════════════════════════════════════
+// TIER FILTER
+// ═══════════════════════════════════════════════
+
+function filterTier(tier){
+  document.querySelectorAll('.tfbtn').forEach(b=>b.classList.remove('active'));
+  const btn=document.querySelector(`.tfbtn[data-f="${tier}"]`);
+  if(btn) btn.classList.add('active');
+
+  basinsLayer.eachLayer(layer=>{
+    const t=layer.feature.properties.tier;
+    const show=(tier==='All'||t===tier);
+    const el=layer.getElement();
+    if(el) el.style.display=show?'':'none';
+  });
+
+  // KPI highlights
+  document.querySelectorAll('.kpi').forEach(k=>{
+    k.classList.toggle('active', tier!=='All' && k.dataset.t===tier);
+  });
+}
+
+// ═══════════════════════════════════════════════
+// DETAIL PANEL
+// ═══════════════════════════════════════════════
+
+function openDetail(p){
+  const tc=TIER_COLORS[p.tier];
+
+  document.getElementById('dbasin-name').textContent = p.name;
+  document.getElementById('dhuc').textContent = `HUC-12: ${p.huc12}`;
+
+  const badge=document.getElementById('dtier');
+  badge.textContent=p.tier.toUpperCase();
+  badge.style.cssText=`background:${tc.bg};color:${tc.text};border:1px solid ${tc.stroke};font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.5px;padding:3px 9px;border-radius:3px;`;
+
+  document.getElementById('dscore').textContent = p.score;
+  document.getElementById('dscore').style.color = tc.text;
+  document.getElementById('d-prob').textContent = `Debris flow P: ${(p.debris_prob*100).toFixed(0)}%`;
+
+  document.getElementById('d-sev').textContent   = `${p.pct_high_sev}%`;
+  document.getElementById('d-slope').textContent = `${p.slope_p90}°`;
+  document.getElementById('d-precip').textContent= `${p.peak_24h} mm`;
+  document.getElementById('d-area').textContent  = `${p.burn_area_km2} km²`;
+  document.getElementById('d-elev').textContent  = `${p.elev_range} m`;
+  document.getElementById('d-p72').textContent   = `${p.precip_72h} mm`;
+  document.getElementById('d-act').textContent   = p.action;
+
+  // Animate score bar after reflow
+  const fill=document.getElementById('dscore-bar');
+  fill.style.width='0';
+  setTimeout(()=>{ fill.style.width=`${p.score}%`; },60);
+
+  // Component bars (normalize to max possible)
+  const comps=[
+    {id:'cb-prob',vid:'cv-prob',val:p.debris_prob*100, max:100},
+    {id:'cb-sev', vid:'cv-sev', val:p.pct_high_sev,    max:100},
+    {id:'cb-slp', vid:'cv-slp', val:(p.slope_p90/60)*100, max:100},
+    {id:'cb-prc', vid:'cv-prc', val:(p.peak_24h/150)*100, max:100},
+  ];
+  const vals=[Math.round(p.debris_prob*100), p.pct_high_sev, p.slope_p90, Math.round(p.peak_24h)];
+  const units=['%','%','°','mm'];
+
+  comps.forEach((c,i)=>{
+    const fill=document.getElementById(c.id);
+    const label=document.getElementById(c.vid);
+    fill.style.width='0';
+    setTimeout(()=>{ fill.style.width=`${Math.min(c.val,100)}%`; }, 80+i*60);
+    label.textContent=`${vals[i]}${units[i]}`;
+  });
+
+  document.getElementById('detail').classList.add('open');
+}
+
+function closeDetail(){
+  document.getElementById('detail').classList.remove('open');
+}
+
+// Close on map click (outside polygon)
+map.on('click',()=>closeDetail());
+
+// ═══════════════════════════════════════════════
+// PULSE ANIMATION CSS injection
+// ═══════════════════════════════════════════════
+const style=document.createElement('style');
+style.textContent=`@keyframes pulse-r{0%{transform:scale(.8);opacity:1;}80%,100%{transform:scale(2.8);opacity:0;}}`;
+document.head.appendChild(style);
+
+// ═══════════════════════════════════════════════
+// INITIAL FLY-IN
+// ═══════════════════════════════════════════════
+setTimeout(()=>{
+  map.flyTo([34.09,-118.90],11,{duration:1.8,easeLinearity:.4});
+},400);
+
+</script>
+</body>
+</html>

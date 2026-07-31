@@ -1,0 +1,55 @@
+# Post-Wildfire Hazard Intelligence Pipeline — Configuration
+# All parameters here are tunable without touching source code.
+
+pipeline:
+  name: "post-wildfire-hazard"
+  version: "1.0.0"
+  target_crs: "EPSG:4326"      # Output CRS for all products
+  target_resolution_m: 30       # Resampling resolution (meters)
+
+burn_severity:
+  dnbr_thresholds:             # Keying off USGS MTBS classification
+    unburned:     [-Inf, 0.1]
+    low:          [0.1,  0.27]
+    moderate_low: [0.27, 0.44]
+    moderate_high:[0.44, 0.66]
+    high:         [0.66, Inf]
+  high_severity_classes:       # Classes counted toward "% high severity"
+    - moderate_high
+    - high
+
+terrain:
+  slope_percentiles: [50, 75, 90]   # P50, P75, P90 slope per basin
+  ruggedness_window: 3               # Pixels for terrain ruggedness index (TRI)
+  min_flow_accumulation: 100         # Cells required to define a stream channel
+
+precipitation:
+  windows_hours: [6, 24, 72]        # Aggregation windows for precip features
+  return_period_threshold_mm: 25    # 1-year 24h precip threshold for exceedance flag
+  era5_variable: "total_precipitation"
+
+hazard_model:
+  n_estimators: 500
+  max_depth: 8
+  min_samples_leaf: 5
+  random_state: 42
+  calibration: "sigmoid"           # Platt scaling for probability calibration
+  cv_strategy: "spatial_loocv"     # Leave-one-watershed-out cross-validation
+
+hazard_index:
+  weights:                         # Must sum to 1.0
+    debris_flow_prob: 0.50
+    pct_high_severity: 0.25
+    slope_p90:         0.15
+    precip_72h_mm:     0.10
+  risk_tiers:
+    low:      [0,   25]
+    moderate: [25,  50]
+    high:     [50,  75]
+    critical: [75, 100]
+
+export:
+  cog_compression: "deflate"
+  cog_blocksize: 512
+  geoparquet_row_group_size: 50000
+  html_report: true
