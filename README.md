@@ -1,6 +1,6 @@
 # Post-Wildfire Hazard Intelligence Pipeline
 
-> \*\*\[▶ Live Demo → Woolsey Fire 2018 Hazard Map](https://sappiah3.github.io/post-wildfire-hazard-intelligence/demo/hazard-map.html)\*\*
+> \*\*\[▶ Live Demo → Woolsey Fire 2018 Hazard Map](https://sappiah3.github.io/post-wildfire-hazard-intelligence/demo/hazard-map.html)*
 
 !\[Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 !\[xarray](https://img.shields.io/badge/xarray-2024-orange)
